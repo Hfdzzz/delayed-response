@@ -4,19 +4,40 @@ const path = require('path');
 const app = express();
 
 const antiddos =
-    require('./middleware/ratelimiter');
+    require('./middleware/delayedresponse');
+
+const stats =
+    require('./monitoring/stats');
+
+require('./monitoring/reporter');
 
 app.use(antiddos);
 
 app.use(express.json());
 
 app.use(
-  express.static(
-    path.join(__dirname, 'public')
-  )
+    express.static(
+        path.join(
+            __dirname,
+            'public'
+        )
+    )
 );
 
+app.get('/', (req, res) => {
+
+    res.sendFile(
+        path.join(
+            __dirname,
+            'public',
+            'index.html'
+        )
+    );
+
+});
+
 app.get('/product', (req, res) => {
+
     res.sendFile(
         path.join(
             __dirname,
@@ -24,9 +45,11 @@ app.get('/product', (req, res) => {
             'deskripsiproduk.html'
         )
     );
+
 });
 
 app.get('/cart', (req, res) => {
+
     res.sendFile(
         path.join(
             __dirname,
@@ -34,9 +57,11 @@ app.get('/cart', (req, res) => {
             'shoppingcart.html'
         )
     );
+
 });
 
 app.get('/checkout', (req, res) => {
+
     res.sendFile(
         path.join(
             __dirname,
@@ -44,10 +69,38 @@ app.get('/checkout', (req, res) => {
             'checkout.html'
         )
     );
+
 });
 
-app.listen(3000, () => {
-  console.log(
-    'Server running on http://localhost:3000'
-  );
+/*
+ * Endpoint laporan penelitian
+ */
+app.get('/report', (req, res) => {
+
+    const report = {
+        totalRequests:
+            stats.totalRequests,
+
+        delayedRequests:
+            stats.delayedRequests,
+
+        totalDelay:
+            stats.totalDelay,
+
+        clients:
+            stats.clients
+    };
+
+    res.json(report);
+
+});
+
+const port = 3000;
+
+app.listen(port, () => {
+
+    console.log(
+        'Server running on port ' + port
+    );
+
 });
