@@ -4,6 +4,21 @@ const stats =
 const clients = new Map();
 
 const WINDOW_MS = 60_000;
+const NORMAL_RPM = 100;
+
+const ignoredExtensions = [
+    '.css',
+    '.js',
+    '.png',
+    '.jpg',
+    '.jpeg',
+    '.gif',
+    '.svg',
+    '.ico',
+    '.woff',
+    '.woff2',
+    '.map'
+];
 
 module.exports = async (
     req,
@@ -11,8 +26,20 @@ module.exports = async (
     next
 ) => {
 
+    // Abaikan asset statis
+    const isAsset =
+        ignoredExtensions.some(
+            ext =>
+                req.path.endsWith(ext)
+        );
+
+    if (isAsset) {
+        return next();
+    }
+
     const clientId =
-        req.get('User-Agent') || req.ip;
+        req.get('User-Agent') ||
+        req.ip;
 
     const now = Date.now();
 
@@ -33,7 +60,8 @@ module.exports = async (
             requests: 0,
             delayed: 0,
             totalDelay: 0,
-            maxScore: 0
+            maxScore: 0,
+            peakRpm: 0
         };
 
     }
@@ -49,7 +77,8 @@ module.exports = async (
     // Sliding window 60 detik
     client.timestamps =
         client.timestamps.filter(
-            time => now - time < WINDOW_MS
+            time =>
+                now - time < WINDOW_MS
         );
 
     client.timestamps.push(now);
@@ -57,22 +86,30 @@ module.exports = async (
     const rpm =
         client.timestamps.length;
 
+    clientStats.peakRpm =
+        Math.max(
+            clientStats.peakRpm,
+            rpm
+        );
+
     /*
      * Risk scoring
      */
 
-    if (rpm <= 100) {
+    if (rpm <= NORMAL_RPM) {
 
-        // Perilaku normal:
-        // score cepat turun
+        // Turunkan score jika kembali normal
         client.score *= 0.90;
 
     } else {
 
-        // Perilaku agresif:
-        // score naik perlahan
+        const excess =
+            rpm - NORMAL_RPM;
+
+        // Naik perlahan
         client.score = Math.min(
-            client.score + 0.5,
+            client.score +
+            (excess * 0.02),
             200
         );
 
@@ -88,13 +125,18 @@ module.exports = async (
      * Adaptive delay
      */
 
-    const delay =
-        Math.min(
+    let delay = 0;
+
+    if (rpm > NORMAL_RPM) {
+
+        delay = Math.min(
             Math.floor(
                 client.score * 5
             ),
-            2000
+            1000
         );
+
+    }
 
     if (delay > 0) {
 
@@ -104,10 +146,15 @@ module.exports = async (
 
         clientStats.delayed++;
 
-        clientStats.totalDelay += delay;
+        clientStats.totalDelay +=
+            delay;
 
-        await new Promise(resolve =>
-            setTimeout(resolve, delay)
+        await new Promise(
+            resolve =>
+                setTimeout(
+                    resolve,
+                    delay
+                )
         );
 
     }
