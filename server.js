@@ -1,106 +1,263 @@
-const express = require('express');
-const path = require('path');
+const express = require("express");
+const path = require("path");
 
 const app = express();
 
-const antiddos =
-    require('./middleware/delayedresponse');
+/*
+|--------------------------------------------------------------------------
+| Middleware
+|--------------------------------------------------------------------------
+*/
+
+const delayedResponse =
+    require("./middleware/delayedresponse");
 
 const stats =
-    require('./monitoring/stats');
+    require("./monitoring/stats");
 
-require('./monitoring/reporter');
+/*
+|--------------------------------------------------------------------------
+| Configuration
+|--------------------------------------------------------------------------
+*/
 
-app.use(antiddos);
+const PORT =
+    process.env.PORT || 3000;
+
+const EXPERIMENT_NAME =
+    process.env.EXPERIMENT || "delayed";
+
+/*
+|--------------------------------------------------------------------------
+| Middleware
+|--------------------------------------------------------------------------
+*/
 
 app.use(express.json());
 
+app.use(delayedResponse);
+
 app.use(
+
     express.static(
+
         path.join(
             __dirname,
-            'public'
+            "public"
         )
+
     )
+
 );
 
-app.get('/', (req, res) => {
+/*
+|--------------------------------------------------------------------------
+| Routes
+|--------------------------------------------------------------------------
+*/
+
+app.get("/", (req, res) => {
 
     res.sendFile(
+
         path.join(
+
             __dirname,
-            'public',
-            'index.html'
+
+            "public",
+
+            "index.html"
+
         )
+
     );
 
 });
 
-app.get('/product', (req, res) => {
+app.get("/product", (req, res) => {
 
     res.sendFile(
+
         path.join(
+
             __dirname,
-            'public',
-            'deskripsiproduk.html'
+
+            "public",
+
+            "deskripsiproduk.html"
+
         )
+
     );
 
 });
 
-app.get('/cart', (req, res) => {
+app.get("/cart", (req, res) => {
 
     res.sendFile(
+
         path.join(
+
             __dirname,
-            'public',
-            'shoppingcart.html'
+
+            "public",
+
+            "shoppingcart.html"
+
         )
+
     );
 
 });
 
-app.get('/checkout', (req, res) => {
+app.get("/checkout", (req, res) => {
 
     res.sendFile(
+
         path.join(
+
             __dirname,
-            'public',
-            'checkout.html'
+
+            "public",
+
+            "checkout.html"
+
         )
+
     );
 
 });
 
 /*
- * Endpoint laporan penelitian
- */
-app.get('/report', (req, res) => {
+|--------------------------------------------------------------------------
+| Health Check
+|--------------------------------------------------------------------------
+*/
 
-    const report = {
-        totalRequests:
+app.get("/health", (req, res) => {
+
+    res.json({
+
+        status: "OK",
+
+        uptime:
+
+            process.uptime(),
+
+        requests:
+
             stats.totalRequests,
 
-        delayedRequests:
-            stats.delayedRequests,
+        delayed:
 
-        totalDelay:
-            stats.totalDelay,
+            stats.delayedRequests
 
-        clients:
-            stats.clients
-    };
-
-    res.json(report);
+    });
 
 });
 
-const port = 3000;
+/*
+|--------------------------------------------------------------------------
+| Experiment Summary
+|--------------------------------------------------------------------------
+*/
 
-app.listen(port, () => {
+app.get("/report", (req, res) => {
+
+    res.json(
+
+        stats.getSummary()
+
+    );
+
+});
+
+/*
+|--------------------------------------------------------------------------
+| Save Experiment Before Exit
+|--------------------------------------------------------------------------
+*/
+
+function shutdown() {
+
+    console.log("");
 
     console.log(
-        'Server running on port ' + port
+        "Saving experiment logs..."
     );
+
+    try {
+
+        const file =
+
+            stats.saveLogs(
+
+                EXPERIMENT_NAME
+
+            );
+
+        console.log(
+            "Experiment saved:"
+        );
+
+        console.log(file);
+
+    }
+
+    catch (err) {
+
+        console.error(err);
+
+    }
+
+    process.exit(0);
+
+}
+
+process.on(
+    "SIGINT",
+    shutdown
+);
+
+process.on(
+    "SIGTERM",
+    shutdown
+);
+
+/*
+|--------------------------------------------------------------------------
+| Start Server
+|--------------------------------------------------------------------------
+*/
+
+app.listen(PORT, () => {
+
+    console.log("");
+
+    console.log("==========================================");
+
+    console.log(
+        "Server started successfully"
+    );
+
+    console.log(
+        `Port           : ${PORT}`
+    );
+
+    console.log(
+        `Experiment     : ${EXPERIMENT_NAME}`
+    );
+
+    console.log(
+        `Health Check   : http://localhost:${PORT}/health`
+    );
+
+    console.log(
+        `Summary        : http://localhost:${PORT}/report`
+    );
+
+    console.log("==========================================");
+
+    console.log("");
 
 });

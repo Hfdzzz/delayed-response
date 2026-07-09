@@ -1,0 +1,19 @@
+{
+    "metadata": {
+        "algorithm": "delayed",
+        "createdAt": "2026-07-09T07:53:08.563Z",
+        "version": "1.0"
+    },
+    "summary": {
+        "startTime": "2026-07-09T07:52:58.045Z",
+        "endTime": "2026-07-09T07:53:08.563Z",
+        "duration": 10518,
+        "totalRequests": 2,
+        "delayedRequests": 0,
+        "totalDelay": 0,
+        "averageDelay": 0,
+        "uniqueClients": 0,
+        "totalLogs": 0
+    },
+    "requests": []
+}
