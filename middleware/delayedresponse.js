@@ -180,13 +180,13 @@ module.exports = async (req, res, next) => {
     const elapsed =
         now - client.lastSeen;
 
-    client.score = Math.max(
+client.score = Math.max(
 
-        0,
+    0,
 
-        client.score - (elapsed / 1000)
+    client.score - (elapsed / 100)
 
-    );
+);
 
     client.lastSeen = now;
 
@@ -305,15 +305,25 @@ module.exports = async (req, res, next) => {
     |--------------------------------------------------------------------------
     */
 
-    client.score +=
+   if (rpm > NORMAL_RPM) {
+
+    client.score += (
 
         (excess * 0.03) +
 
         (burstRatio * 0.80) +
 
-        (client.violationCount * 0.50) +
+        (client.violationCount * 0.50)
 
-        endpointWeight;
+    ) * endpointWeight;
+
+}
+
+if (rpm <= NORMAL_RPM) {
+
+    client.score *= 0.90;
+
+}
 
     client.score =
         Math.min(
@@ -333,19 +343,19 @@ module.exports = async (req, res, next) => {
 
     let riskLevel = "LOW";
 
-    if (client.score >= 120) {
+    if (client.score >= 180) {
 
         riskLevel = "CRITICAL";
 
     }
 
-    else if (client.score >= 80) {
+    else if (client.score >= 120) {
 
         riskLevel = "HIGH";
 
     }
 
-    else if (client.score >= 40) {
+    else if (client.score >= 60) {
 
         riskLevel = "MEDIUM";
 
