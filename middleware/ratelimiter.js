@@ -45,6 +45,7 @@ module.exports = (req, res, next) => {
     //--------------------------------------------------
 
     const clientId =
+        req.get("X-Client-ID") ||
         `${req.ip}:${req.get("User-Agent") || "unknown"}`;
 
     //--------------------------------------------------
