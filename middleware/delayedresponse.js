@@ -29,6 +29,9 @@ const ignoredExtensions = [
     ".ico",
     ".woff",
     ".woff2",
+    ".webp",
+    ".ttf",
+    ".otf",
     ".map"
 ];
 
@@ -41,6 +44,9 @@ const ignoredExtensions = [
 const endpointWeights = {
 
     "/": 1,
+    "/product": 1,
+    "/cart": 1,
+    "/checkout": 1,
 
     "/login": 6,
 

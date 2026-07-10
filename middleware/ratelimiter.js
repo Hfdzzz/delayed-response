@@ -21,6 +21,9 @@ module.exports = (req, res, next) => {
         ".svg",
         ".ico",
         ".woff",
+        ".webp",
+        ".ttf",
+        ".otf",
         ".woff2",
         ".map"
     ];
