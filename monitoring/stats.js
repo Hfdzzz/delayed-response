@@ -83,16 +83,19 @@ class Stats {
                 data.endpointWeight || 1,
 
             score:
-                data.score || 0,
+                data.score ?? 0,
 
             riskLevel:
-                data.riskLevel || "LOW",
+                data.riskLevel ?? "LOW",
 
             delay:
-                data.delay || 0,
+                data.delay ?? 0,
+
+            mitigationApplied:
+                data.mitigationApplied ?? false,
 
             blocked:
-                data.blocked || false
+                data.blocked ?? false
 
         });
 
