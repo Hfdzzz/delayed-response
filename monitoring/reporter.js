@@ -39,7 +39,7 @@ if (!FILE_NAME) {
     );
 
     console.log(
-        "node reporter.js delayed.json 40"
+        "node reporter.js ratelimit.json"
     );
 
     process.exit(0);
@@ -233,7 +233,7 @@ for (const request of requests) {
     ) {
 
         predictedAttack =
-            request.score >= THRESHOLD;
+            request.mitigationApplied === true;
 
     }
 
@@ -524,11 +524,11 @@ console.log("======================================================");
 
 console.log(`Algorithm           : ${experiment.metadata.algorithm}`);
 
-if (experiment.metadata.algorithm === "delayed") {
+// if (experiment.metadata.algorithm === "delayed") {
 
-    console.log(`Threshold           : ${THRESHOLD}`);
+//     console.log(`Threshold           : ${THRESHOLD}`);
 
-}
+// }
 
 console.log(`Experiment Time     : ${experiment.metadata.createdAt}`);
 
@@ -649,218 +649,218 @@ console.log(`Average Delay      : ${experiment.summary.averageDelay} ms`);
 console.log("======================================================");
 console.log("");
 
-/*
-|--------------------------------------------------------------------------
-| Threshold Optimizer
-|--------------------------------------------------------------------------
-*/
+// /*
+// |--------------------------------------------------------------------------
+// | Threshold Optimizer
+// |--------------------------------------------------------------------------
+// */
 
-console.log("");
-console.log("Threshold Optimization");
-console.log("======================================================");
+// console.log("");
+// console.log("Threshold Optimization");
+// console.log("======================================================");
 
-const thresholdResults = [];
+// const thresholdResults = [];
 
-for (
+// for (
 
-    let threshold = 10;
+//     let threshold = 10;
 
-    threshold <= 100;
+//     threshold <= 100;
 
-    threshold += 10
+//     threshold += 10
 
-) {
+// ) {
 
-    let tp = 0;
-    let fp = 0;
-    let tn = 0;
-    let fn = 0;
+//     let tp = 0;
+//     let fp = 0;
+//     let tn = 0;
+//     let fn = 0;
 
-    for (const request of requests) {
+//     for (const request of requests) {
 
-        const actualAttack =
-            request.actual === "attack";
+//         const actualAttack =
+//             request.actual === "attack";
 
-        let predictedAttack = false;
+//         let predictedAttack = false;
 
-        if (request.algorithm === "delayed") {
+//         if (request.algorithm === "delayed") {
 
-            predictedAttack =
-                request.score >= threshold;
+//             predictedAttack =
+//                 request.score >= threshold;
 
-        }
+//         }
 
-        else if (
-            request.algorithm === "ratelimit"
-        ) {
+//         else if (
+//             request.algorithm === "ratelimit"
+//         ) {
 
-            predictedAttack =
-                request.blocked === true;
+//             predictedAttack =
+//                 request.blocked === true;
 
-        }
+//         }
 
-        if (
-            actualAttack &&
-            predictedAttack
-        ) {
+//         if (
+//             actualAttack &&
+//             predictedAttack
+//         ) {
 
-            tp++;
+//             tp++;
 
-        }
+//         }
 
-        else if (
-            actualAttack &&
-            !predictedAttack
-        ) {
+//         else if (
+//             actualAttack &&
+//             !predictedAttack
+//         ) {
 
-            fn++;
+//             fn++;
 
-        }
+//         }
 
-        else if (
-            !actualAttack &&
-            predictedAttack
-        ) {
+//         else if (
+//             !actualAttack &&
+//             predictedAttack
+//         ) {
 
-            fp++;
+//             fp++;
 
-        }
+//         }
 
-        else {
+//         else {
 
-            tn++;
+//             tn++;
 
-        }
+//         }
 
-    }
+//     }
 
-    //--------------------------------------------------
-    // Metrics
-    //--------------------------------------------------
+//     //--------------------------------------------------
+//     // Metrics
+//     //--------------------------------------------------
 
-    const precision =
-        divide(
-            tp,
-            tp + fp
-        );
+//     const precision =
+//         divide(
+//             tp,
+//             tp + fp
+//         );
 
-    const recall =
-        divide(
-            tp,
-            tp + fn
-        );
+//     const recall =
+//         divide(
+//             tp,
+//             tp + fn
+//         );
 
-    const accuracy =
-        divide(
-            tp + tn,
-            tp + fp + tn + fn
-        );
+//     const accuracy =
+//         divide(
+//             tp + tn,
+//             tp + fp + tn + fn
+//         );
 
-    const fpr =
-        divide(
-            fp,
-            fp + tn
-        );
+//     const fpr =
+//         divide(
+//             fp,
+//             fp + tn
+//         );
 
-    const f1 =
+//     const f1 =
 
-        (precision + recall) === 0
+//         (precision + recall) === 0
 
-            ? 0
+//             ? 0
 
-            :
+//             :
 
-            (
+//             (
 
-                2 *
+//                 2 *
 
-                precision *
+//                 precision *
 
-                recall
+//                 recall
 
-            )
+//             )
 
-            /
+//             /
 
-            (
+//             (
 
-                precision +
+//                 precision +
 
-                recall
+//                 recall
 
-            );
+//             );
 
-    thresholdResults.push({
+//     thresholdResults.push({
 
-        threshold,
+//         threshold,
 
-        TPR:
-            percent(recall),
+//         TPR:
+//             percent(recall),
 
-        FPR:
-            percent(fpr),
+//         FPR:
+//             percent(fpr),
 
-        Precision:
-            percent(precision),
+//         Precision:
+//             percent(precision),
 
-        Accuracy:
-            percent(accuracy),
+//         Accuracy:
+//             percent(accuracy),
 
-        F1:
-            percent(f1)
+//         F1:
+//             percent(f1)
 
-    });
+//     });
 
-}
+// }
 
-/*
-|--------------------------------------------------------------------------
-| Best Threshold
-|--------------------------------------------------------------------------
-*/
+// /*
+// |--------------------------------------------------------------------------
+// | Best Threshold
+// |--------------------------------------------------------------------------
+// */
 
-const bestThreshold =
+// const bestThreshold =
 
-    thresholdResults.reduce(
+//     thresholdResults.reduce(
 
-        (best, current) =>
+//         (best, current) =>
 
-            current.F1 > best.F1
+//             current.F1 > best.F1
 
-                ? current
+//                 ? current
 
-                : best
+//                 : best
 
-    );
+//     );
 
-console.table(thresholdResults);
+// console.table(thresholdResults);
 
-console.log("");
+// console.log("");
 
-console.log("======================================================");
+// console.log("======================================================");
 
-console.log(
-    `Recommended Threshold : ${bestThreshold.threshold}`
-);
+// console.log(
+//     `Recommended Threshold : ${bestThreshold.threshold}`
+// );
 
-console.log(
-    `Best F1 Score         : ${bestThreshold.F1}%`
-);
+// console.log(
+//     `Best F1 Score         : ${bestThreshold.F1}%`
+// );
 
-console.log(
-    `TPR                  : ${bestThreshold.TPR}%`
-);
+// console.log(
+//     `TPR                  : ${bestThreshold.TPR}%`
+// );
 
-console.log(
-    `FPR                  : ${bestThreshold.FPR}%`
-);
+// console.log(
+//     `FPR                  : ${bestThreshold.FPR}%`
+// );
 
-console.log(
-    `Precision            : ${bestThreshold.Precision}%`
-);
+// console.log(
+//     `Precision            : ${bestThreshold.Precision}%`
+// );
 
-console.log(
-    `Accuracy             : ${bestThreshold.Accuracy}%`
-);
+// console.log(
+//     `Accuracy             : ${bestThreshold.Accuracy}%`
+// );
 
-console.log("======================================================");
+// console.log("======================================================");

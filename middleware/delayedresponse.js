@@ -18,6 +18,8 @@ const NORMAL_RPM = 100;
 const MAX_SCORE = 200;
 const MAX_DELAY = 1000;
 
+const SIGNIFICANT_DELAY = 500;
+
 const ignoredExtensions = [
     ".css",
     ".js",
@@ -110,7 +112,8 @@ module.exports = async (req, res, next) => {
 
     const clientId =
         req.get("X-Client-ID") ||
-        `${req.ip}:${req.get("User-Agent") || "unknown"}`;
+        `${req.get("User-Agent") || "unknown"}`;
+        // `${req.ip}:${req.get("User-Agent") || "unknown"}`;
 
     //--------------------------------------------------
     // Ground Truth
@@ -528,7 +531,9 @@ if (rpm <= NORMAL_RPM) {
 
         delay,
 
-        blocked: false
+        mitigationApplied: delay >= SIGNIFICANT_DELAY,
+
+        //blocked: false
 
     });
 
