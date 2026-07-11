@@ -10,19 +10,6 @@ const path = require("path");
 const LOG_DIR =
     path.join(__dirname, "../logs");
 
-/*
-|--------------------------------------------------------------------------
-| Threshold
-|--------------------------------------------------------------------------
-|
-| Default:
-|
-| node reporter.js delayed.json
-|
-| node reporter.js delayed.json 40
-|
-*/
-
 const FILE_NAME =
     process.argv[2];
 
@@ -30,9 +17,7 @@ if (!FILE_NAME) {
 
     console.log("");
 
-    console.log(
-        "Usage:"
-    );
+    console.log("Usage:");
 
     console.log(
         "node reporter.js delayed.json"
@@ -46,41 +31,17 @@ if (!FILE_NAME) {
 
 }
 
-const THRESHOLD =
-
-    Number(process.argv[3]) ||
-
-    40;
-
-/*
-|--------------------------------------------------------------------------
-| Read JSON
-|--------------------------------------------------------------------------
-*/
-
 const filePath =
-
     path.join(
-
         LOG_DIR,
-
         FILE_NAME
-
     );
 
-if (
-
-    !fs.existsSync(filePath)
-
-) {
+if (!fs.existsSync(filePath)) {
 
     console.log("");
 
-    console.log(
-
-        "Log file not found."
-
-    );
+    console.log("Log file not found.");
 
     console.log(filePath);
 
@@ -89,17 +50,11 @@ if (
 }
 
 const experiment =
-
     JSON.parse(
-
         fs.readFileSync(
-
             filePath,
-
             "utf8"
-
         )
-
     );
 
 const requests =
@@ -107,39 +62,28 @@ const requests =
 
 /*
 |--------------------------------------------------------------------------
-| Confusion Matrix
-|--------------------------------------------------------------------------
-*/
-
-let TP = 0;
-
-let FP = 0;
-
-let TN = 0;
-
-let FN = 0;
-
-/*
-|--------------------------------------------------------------------------
 | Statistics
 |--------------------------------------------------------------------------
 */
 
-let totalScore = 0;
+let attackRequests = 0;
+let legitimateRequests = 0;
 
 let totalDelay = 0;
+let attackDelay = 0;
+let legitimateDelay = 0;
 
+let attackDelayCount = 0;
+let legitimateDelayCount = 0;
+
+let totalScore = 0;
 let peakScore = 0;
-
 let peakRPM = 0;
-
-let attackRequests = 0;
-
-let legitimateRequests = 0;
+let maxDelay = 0;
 
 /*
 |--------------------------------------------------------------------------
-| Risk Distribution
+| Risk Distribution (Request)
 |--------------------------------------------------------------------------
 */
 
@@ -157,38 +101,113 @@ const riskDistribution = {
 
 /*
 |--------------------------------------------------------------------------
-| Process Every Request
+| Mitigation Distribution
+|--------------------------------------------------------------------------
+*/
+
+const mitigation = {
+
+    NONE: 0,
+
+    LIGHT: 0,
+
+    MODERATE: 0,
+
+    AGGRESSIVE: 0
+
+};
+
+/*
+|--------------------------------------------------------------------------
+| Client Aggregation
+|--------------------------------------------------------------------------
+|
+| Key :
+| clientId
+|
+| Value :
+| {
+|   actual,
+|   highestRisk,
+|   maxDelay,
+|   maxScore
+| }
+|
+*/
+
+const clients = new Map();
+
+/*
+|--------------------------------------------------------------------------
+| Process Requests
 |--------------------------------------------------------------------------
 */
 
 for (const request of requests) {
 
-    //--------------------------------------------------
-    // Basic Statistics
-    //--------------------------------------------------
+    //------------------------------------------
+    // Traffic
+    //------------------------------------------
 
-    totalScore += request.score;
+    if (request.actual === "attack")
+        attackRequests++;
+    else
+        legitimateRequests++;
+
+    //------------------------------------------
+    // Delay
+    //------------------------------------------
 
     totalDelay += request.delay;
 
-    peakScore = Math.max(
-        peakScore,
-        request.score
-    );
+    maxDelay =
+        Math.max(
+            maxDelay,
+            request.delay
+        );
 
-    peakRPM = Math.max(
-        peakRPM,
-        request.rpm
-    );
+    if (request.actual === "attack") {
 
-    //--------------------------------------------------
+        attackDelay += request.delay;
+
+        attackDelayCount++;
+
+    }
+
+    else {
+
+        legitimateDelay += request.delay;
+
+        legitimateDelayCount++;
+
+    }
+
+    //------------------------------------------
+    // Score
+    //------------------------------------------
+
+    totalScore += request.score;
+
+    peakScore =
+        Math.max(
+            peakScore,
+            request.score
+        );
+
+    peakRPM =
+        Math.max(
+            peakRPM,
+            request.rpm
+        );
+
+    //------------------------------------------
     // Risk Distribution
-    //--------------------------------------------------
+    //------------------------------------------
 
     if (
-        riskDistribution.hasOwnProperty(
+        riskDistribution[
             request.riskLevel
-        )
+        ] !== undefined
     ) {
 
         riskDistribution[
@@ -197,105 +216,69 @@ for (const request of requests) {
 
     }
 
-    //--------------------------------------------------
-    // Ground Truth
-    //--------------------------------------------------
+    //------------------------------------------
+    // Mitigation Level
+    //------------------------------------------
 
-    const actualAttack =
-        request.actual === "attack";
+    if (request.delay === 0)
+        mitigation.NONE++;
 
-    if (actualAttack) {
+    else if (request.delay < 300)
+        mitigation.LIGHT++;
 
-        attackRequests++;
+    else if (request.delay < 700)
+        mitigation.MODERATE++;
 
-    } else {
+    else
+        mitigation.AGGRESSIVE++;
 
-        legitimateRequests++;
+    //------------------------------------------
+    // Client Aggregation
+    //------------------------------------------
 
-    }
+    const current =
+        clients.get(request.clientId);
 
-    //--------------------------------------------------
-    // Prediction
-    //--------------------------------------------------
+    if (!current) {
 
-    let predictedAttack = false;
+        clients.set(
+            request.clientId,
+            {
 
-    /*
-    |--------------------------------------------------------------------------
-    | Delayed Response
-    |
-    | Menggunakan Risk Score
-    |--------------------------------------------------------------------------
-    */
+                actual:
+                    request.actual,
 
-    if (
-        request.algorithm === "delayed"
-    ) {
+                highestRisk:
+                    request.riskLevel,
 
-        predictedAttack =
-            request.mitigationApplied === true;
+                maxDelay:
+                    request.delay,
 
-    }
+                maxScore:
+                    request.score
 
-    /*
-    |--------------------------------------------------------------------------
-    | Rate Limiting
-    |
-    | Menggunakan blocked
-    |--------------------------------------------------------------------------
-    */
-
-    else if (
-        request.algorithm === "ratelimit"
-    ) {
-
-        predictedAttack =
-            request.blocked === true;
-
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Confusion Matrix
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-
-        actualAttack &&
-        predictedAttack
-
-    ) {
-
-        TP++;
-
-    }
-
-    else if (
-
-        actualAttack &&
-        !predictedAttack
-
-    ) {
-
-        FN++;
-
-    }
-
-    else if (
-
-        !actualAttack &&
-        predictedAttack
-
-    ) {
-
-        FP++;
+            }
+        );
 
     }
 
     else {
 
-        TN++;
+        if (
+            request.score >
+            current.maxScore
+        ) {
+
+            current.maxScore =
+                request.score;
+
+            current.maxDelay =
+                request.delay;
+
+            current.highestRisk =
+                request.riskLevel;
+
+        }
 
     }
 
@@ -303,564 +286,318 @@ for (const request of requests) {
 
 /*
 |--------------------------------------------------------------------------
-| Average Statistics
+| Helper
 |--------------------------------------------------------------------------
 */
 
-const averageScore =
+function average(total, count) {
 
-    requests.length === 0
-
-        ? 0
-
-        :
-
-        Number(
-
-            (
-
-                totalScore /
-
-                requests.length
-
-            ).toFixed(2)
-
-        );
-
-const averageDelay =
-
-    requests.length === 0
-
-        ? 0
-
-        :
-
-        Number(
-
-            (
-
-                totalDelay /
-
-                requests.length
-
-            ).toFixed(2)
-
-        );
-
-/*
-|--------------------------------------------------------------------------
-| Evaluation Metrics
-|--------------------------------------------------------------------------
-*/
-
-/*
-|--------------------------------------------------------------------------
-| Safe Division
-|--------------------------------------------------------------------------
-*/
-
-function divide(a, b) {
-
-    if (b === 0) {
-
+    if (count === 0)
         return 0;
 
-    }
-
-    return a / b;
+    return Number(
+        (total / count).toFixed(2)
+    );
 
 }
 
-/*
-|--------------------------------------------------------------------------
-| Confusion Matrix Metrics
-|--------------------------------------------------------------------------
-*/
+function percentage(value, total) {
 
-const TPR =
-    divide(
-        TP,
-        TP + FN
-    );
-
-const FPR =
-    divide(
-        FP,
-        FP + TN
-    );
-
-const TNR =
-    divide(
-        TN,
-        TN + FP
-    );
-
-const FNR =
-    divide(
-        FN,
-        FN + TP
-    );
-
-const Precision =
-    divide(
-        TP,
-        TP + FP
-    );
-
-const Recall =
-    TPR;
-
-const Accuracy =
-    divide(
-        TP + TN,
-        TP + FP + TN + FN
-    );
-
-const Specificity =
-    TNR;
-
-const F1Score =
-
-    (Precision + Recall) === 0
-
-        ? 0
-
-        :
-
-        (
-
-            2 *
-
-            Precision *
-
-            Recall
-
-        )
-
-        /
-
-        (
-
-            Precision +
-
-            Recall
-
-        );
-
-/*
-|--------------------------------------------------------------------------
-| Percentage Helper
-|--------------------------------------------------------------------------
-*/
-
-function percent(value) {
+    if (total === 0)
+        return 0;
 
     return Number(
-
-        (value * 100)
-
-            .toFixed(2)
-
+        (
+            value / total * 100
+        ).toFixed(2)
     );
 
 }
 
 /*
 |--------------------------------------------------------------------------
-| Convert to Percentage
+| Client Statistics
 |--------------------------------------------------------------------------
 */
 
-const metrics = {
+const clientSummary = {
 
-    TP,
+    total: clients.size,
 
-    FP,
+    attack: 0,
 
-    TN,
+    legitimate: 0
 
-    FN,
+};
 
-    TPR:
-        percent(TPR),
+const attackClientRisk = {
 
-    FPR:
-        percent(FPR),
+    LOW: 0,
 
-    TNR:
-        percent(TNR),
+    MEDIUM: 0,
 
-    FNR:
-        percent(FNR),
+    HIGH: 0,
 
-    Precision:
-        percent(Precision),
+    CRITICAL: 0
 
-    Recall:
-        percent(Recall),
+};
 
-    Accuracy:
-        percent(Accuracy),
+const legitimateClientRisk = {
 
-    Specificity:
-        percent(Specificity),
+    LOW: 0,
 
-    F1Score:
-        percent(F1Score)
+    MEDIUM: 0,
+
+    HIGH: 0,
+
+    CRITICAL: 0
 
 };
 
 /*
 |--------------------------------------------------------------------------
-| Report Header
+| Process Client
 |--------------------------------------------------------------------------
 */
 
-console.log("\n");
+for (const client of clients.values()) {
 
-console.log("======================================================");
-console.log("          DDOS MITIGATION EXPERIMENT REPORT");
-console.log("======================================================");
+    //------------------------------------------
+    // Client Type
+    //------------------------------------------
 
-console.log(`Algorithm           : ${experiment.metadata.algorithm}`);
+    if (client.actual === "attack") {
 
-// if (experiment.metadata.algorithm === "delayed") {
+        clientSummary.attack++;
 
-//     console.log(`Threshold           : ${THRESHOLD}`);
+        attackClientRisk[
+            client.highestRisk
+        ]++;
 
-// }
+    }
 
-console.log(`Experiment Time     : ${experiment.metadata.createdAt}`);
+    else {
 
-console.log("------------------------------------------------------");
+        clientSummary.legitimate++;
+
+        legitimateClientRisk[
+            client.highestRisk
+        ]++;
+
+    }
+
+}
 
 /*
 |--------------------------------------------------------------------------
-| Traffic Summary
+| Delay Summary
 |--------------------------------------------------------------------------
 */
+
+const delaySummary = {
+
+    average:
+
+        average(
+            totalDelay,
+            requests.length
+        ),
+
+    attackAverage:
+
+        average(
+            attackDelay,
+            attackDelayCount
+        ),
+
+    legitimateAverage:
+
+        average(
+            legitimateDelay,
+            legitimateDelayCount
+        ),
+
+    maximum:
+
+        maxDelay
+
+};
+
+/*
+|--------------------------------------------------------------------------
+| Score Summary
+|--------------------------------------------------------------------------
+*/
+
+const scoreSummary = {
+
+    average:
+
+        average(
+            totalScore,
+            requests.length
+        ),
+
+    peak:
+
+        peakScore,
+
+    peakRPM:
+
+        peakRPM
+
+};
+
+/*
+|--------------------------------------------------------------------------
+| Mitigation Summary
+|--------------------------------------------------------------------------
+*/
+
+const mitigationSummary = {
+
+    none: mitigation.NONE,
+
+    light: mitigation.LIGHT,
+
+    moderate: mitigation.MODERATE,
+
+    aggressive: mitigation.AGGRESSIVE,
+
+    nonePercent:
+
+        percentage(
+            mitigation.NONE,
+            requests.length
+        ),
+
+    lightPercent:
+
+        percentage(
+            mitigation.LIGHT,
+            requests.length
+        ),
+
+    moderatePercent:
+
+        percentage(
+            mitigation.MODERATE,
+            requests.length
+        ),
+
+    aggressivePercent:
+
+        percentage(
+            mitigation.AGGRESSIVE,
+            requests.length
+        )
+
+};
+
+/*
+|--------------------------------------------------------------------------
+| Report
+|--------------------------------------------------------------------------
+*/
+
+console.log("");
+
+console.log("======================================================");
+console.log("           DDOS MITIGATION REPORT");
+console.log("======================================================");
+
+console.log(`Algorithm              : ${experiment.metadata.algorithm}`);
+console.log(`Experiment Time        : ${experiment.metadata.createdAt}`);
+
+console.log("------------------------------------------------------");
 
 console.log("Traffic Summary");
 
-console.log(`Total Requests      : ${requests.length}`);
-
-console.log(`Attack Requests     : ${attackRequests}`);
-
-console.log(`Legitimate Requests : ${legitimateRequests}`);
-
-console.log(`Unique Clients      : ${experiment.summary.uniqueClients}`);
+console.log(`Total Requests         : ${requests.length}`);
+console.log(`Attack Requests        : ${attackRequests}`);
+console.log(`Legitimate Requests    : ${legitimateRequests}`);
 
 console.log("------------------------------------------------------");
 
-/*
-|--------------------------------------------------------------------------
-| Confusion Matrix
-|--------------------------------------------------------------------------
-*/
+console.log("Client Summary");
 
-console.log("Confusion Matrix");
-
-console.log(`TP                  : ${TP}`);
-
-console.log(`FP                  : ${FP}`);
-
-console.log(`TN                  : ${TN}`);
-
-console.log(`FN                  : ${FN}`);
+console.log(`Total Clients          : ${clientSummary.total}`);
+console.log(`Attack Clients         : ${clientSummary.attack}`);
+console.log(`Legitimate Clients     : ${clientSummary.legitimate}`);
 
 console.log("------------------------------------------------------");
 
-/*
-|--------------------------------------------------------------------------
-| Evaluation Metrics
-|--------------------------------------------------------------------------
-*/
+console.log("Attack Client Distribution");
 
-console.log("Evaluation Metrics");
-
-console.log(`TPR (Recall)        : ${metrics.TPR}%`);
-
-console.log(`FPR                : ${metrics.FPR}%`);
-
-console.log(`Precision          : ${metrics.Precision}%`);
-
-console.log(`Accuracy           : ${metrics.Accuracy}%`);
-
-console.log(`F1 Score           : ${metrics.F1Score}%`);
-
-console.log(`Specificity        : ${metrics.Specificity}%`);
-
-console.log(`False Neg. Rate    : ${metrics.FNR}%`);
+console.log(`LOW                    : ${attackClientRisk.LOW}`);
+console.log(`MEDIUM                 : ${attackClientRisk.MEDIUM}`);
+console.log(`HIGH                   : ${attackClientRisk.HIGH}`);
+console.log(`CRITICAL               : ${attackClientRisk.CRITICAL}`);
 
 console.log("------------------------------------------------------");
 
-/*
-|--------------------------------------------------------------------------
-| Score Statistics
-|--------------------------------------------------------------------------
-*/
+console.log("Legitimate Client Distribution");
 
-console.log("Score Statistics");
-
-console.log(`Average Score      : ${averageScore}`);
-
-console.log(`Peak Score         : ${peakScore}`);
-
-console.log(`Peak RPM           : ${peakRPM}`);
-
-console.log(`Average Delay      : ${averageDelay} ms`);
+console.log(`LOW                    : ${legitimateClientRisk.LOW}`);
+console.log(`MEDIUM                 : ${legitimateClientRisk.MEDIUM}`);
+console.log(`HIGH                   : ${legitimateClientRisk.HIGH}`);
+console.log(`CRITICAL               : ${legitimateClientRisk.CRITICAL}`);
 
 console.log("------------------------------------------------------");
 
-/*
-|--------------------------------------------------------------------------
-| Risk Distribution
-|--------------------------------------------------------------------------
-*/
+console.log("Delay Summary");
 
-console.log("Risk Distribution");
-
-console.log(`LOW                : ${riskDistribution.LOW}`);
-
-console.log(`MEDIUM             : ${riskDistribution.MEDIUM}`);
-
-console.log(`HIGH               : ${riskDistribution.HIGH}`);
-
-console.log(`CRITICAL           : ${riskDistribution.CRITICAL}`);
+console.log(`Average Delay          : ${delaySummary.average} ms`);
+console.log(`Attack Delay Avg       : ${delaySummary.attackAverage} ms`);
+console.log(`Legitimate Delay Avg   : ${delaySummary.legitimateAverage} ms`);
+console.log(`Maximum Delay          : ${delaySummary.maximum} ms`);
 
 console.log("------------------------------------------------------");
 
-/*
-|--------------------------------------------------------------------------
-| Dataset Summary
-|--------------------------------------------------------------------------
-*/
+console.log("Mitigation Summary");
 
-console.log("Dataset");
+console.log(
+    `No Mitigation         : ${mitigationSummary.none} (${mitigationSummary.nonePercent}%)`
+);
 
-console.log(`Stored Requests    : ${experiment.summary.totalLogs}`);
+console.log(
+    `Light Mitigation      : ${mitigationSummary.light} (${mitigationSummary.lightPercent}%)`
+);
 
-console.log(`Delayed Requests   : ${experiment.summary.delayedRequests}`);
+console.log(
+    `Moderate Mitigation   : ${mitigationSummary.moderate} (${mitigationSummary.moderatePercent}%)`
+);
 
-console.log(`Total Delay        : ${experiment.summary.totalDelay} ms`);
+console.log(
+    `Aggressive Mitigation : ${mitigationSummary.aggressive} (${mitigationSummary.aggressivePercent}%)`
+);
 
-console.log(`Average Delay      : ${experiment.summary.averageDelay} ms`);
+console.log("------------------------------------------------------");
+
+console.log("Risk Distribution (Request)");
+
+console.log(`LOW                    : ${riskDistribution.LOW}`);
+console.log(`MEDIUM                 : ${riskDistribution.MEDIUM}`);
+console.log(`HIGH                   : ${riskDistribution.HIGH}`);
+console.log(`CRITICAL               : ${riskDistribution.CRITICAL}`);
+
+console.log("------------------------------------------------------");
+
+console.log("Score Summary");
+
+console.log(`Average Score          : ${scoreSummary.average}`);
+console.log(`Peak Score             : ${scoreSummary.peak}`);
+console.log(`Peak RPM               : ${scoreSummary.peakRPM}`);
+
+console.log("------------------------------------------------------");
+
+console.log("Dataset Summary");
+
+console.log(`Stored Requests        : ${experiment.summary.totalLogs}`);
+console.log(`Delayed Requests       : ${experiment.summary.delayedRequests}`);
+console.log(`Total Delay            : ${experiment.summary.totalDelay} ms`);
+console.log(`Average Delay          : ${experiment.summary.averageDelay} ms`);
+console.log(`Unique Clients         : ${experiment.summary.uniqueClients}`);
 
 console.log("======================================================");
 console.log("");
-
-// /*
-// |--------------------------------------------------------------------------
-// | Threshold Optimizer
-// |--------------------------------------------------------------------------
-// */
-
-// console.log("");
-// console.log("Threshold Optimization");
-// console.log("======================================================");
-
-// const thresholdResults = [];
-
-// for (
-
-//     let threshold = 10;
-
-//     threshold <= 100;
-
-//     threshold += 10
-
-// ) {
-
-//     let tp = 0;
-//     let fp = 0;
-//     let tn = 0;
-//     let fn = 0;
-
-//     for (const request of requests) {
-
-//         const actualAttack =
-//             request.actual === "attack";
-
-//         let predictedAttack = false;
-
-//         if (request.algorithm === "delayed") {
-
-//             predictedAttack =
-//                 request.score >= threshold;
-
-//         }
-
-//         else if (
-//             request.algorithm === "ratelimit"
-//         ) {
-
-//             predictedAttack =
-//                 request.blocked === true;
-
-//         }
-
-//         if (
-//             actualAttack &&
-//             predictedAttack
-//         ) {
-
-//             tp++;
-
-//         }
-
-//         else if (
-//             actualAttack &&
-//             !predictedAttack
-//         ) {
-
-//             fn++;
-
-//         }
-
-//         else if (
-//             !actualAttack &&
-//             predictedAttack
-//         ) {
-
-//             fp++;
-
-//         }
-
-//         else {
-
-//             tn++;
-
-//         }
-
-//     }
-
-//     //--------------------------------------------------
-//     // Metrics
-//     //--------------------------------------------------
-
-//     const precision =
-//         divide(
-//             tp,
-//             tp + fp
-//         );
-
-//     const recall =
-//         divide(
-//             tp,
-//             tp + fn
-//         );
-
-//     const accuracy =
-//         divide(
-//             tp + tn,
-//             tp + fp + tn + fn
-//         );
-
-//     const fpr =
-//         divide(
-//             fp,
-//             fp + tn
-//         );
-
-//     const f1 =
-
-//         (precision + recall) === 0
-
-//             ? 0
-
-//             :
-
-//             (
-
-//                 2 *
-
-//                 precision *
-
-//                 recall
-
-//             )
-
-//             /
-
-//             (
-
-//                 precision +
-
-//                 recall
-
-//             );
-
-//     thresholdResults.push({
-
-//         threshold,
-
-//         TPR:
-//             percent(recall),
-
-//         FPR:
-//             percent(fpr),
-
-//         Precision:
-//             percent(precision),
-
-//         Accuracy:
-//             percent(accuracy),
-
-//         F1:
-//             percent(f1)
-
-//     });
-
-// }
-
-// /*
-// |--------------------------------------------------------------------------
-// | Best Threshold
-// |--------------------------------------------------------------------------
-// */
-
-// const bestThreshold =
-
-//     thresholdResults.reduce(
-
-//         (best, current) =>
-
-//             current.F1 > best.F1
-
-//                 ? current
-
-//                 : best
-
-//     );
-
-// console.table(thresholdResults);
-
-// console.log("");
-
-// console.log("======================================================");
-
-// console.log(
-//     `Recommended Threshold : ${bestThreshold.threshold}`
-// );
-
-// console.log(
-//     `Best F1 Score         : ${bestThreshold.F1}%`
-// );
-
-// console.log(
-//     `TPR                  : ${bestThreshold.TPR}%`
-// );
-
-// console.log(
-//     `FPR                  : ${bestThreshold.FPR}%`
-// );
-
-// console.log(
-//     `Precision            : ${bestThreshold.Precision}%`
-// );
-
-// console.log(
-//     `Accuracy             : ${bestThreshold.Accuracy}%`
-// );
-
-// console.log("======================================================");

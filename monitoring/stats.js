@@ -50,37 +50,37 @@ class Stats {
         this.requests.push({
 
             algorithm:
-                data.algorithm || "unknown",
+                data.algorithm ?? "unknown",
 
             timestamp:
-                data.timestamp || Date.now(),
+                data.timestamp ?? Date.now(),
 
             clientId:
-                data.clientId || "unknown",
+                data.clientId ?? "unknown",
 
             actual:
-                data.actual || "unknown",
+                data.actual ?? "unknown",
 
             method:
-                data.method || "GET",
+                data.method ?? "GET",
 
             path:
-                data.path || "/",
+                data.path ?? "/",
 
             rpm:
-                data.rpm || 0,
+                data.rpm ?? 0,
 
             excess:
-                data.excess || 0,
+                data.excess ?? 0,
 
             burstRatio:
-                data.burstRatio || 0,
+                data.burstRatio ?? 0,
 
             violationCount:
-                data.violationCount || 0,
+                data.violationCount ?? 0,
 
             endpointWeight:
-                data.endpointWeight || 1,
+                data.endpointWeight ?? 1,
 
             score:
                 data.score ?? 0,
@@ -93,6 +93,15 @@ class Stats {
 
             mitigationApplied:
                 data.mitigationApplied ?? false,
+
+            responseAction:
+                data.responseAction ?? "ALLOW",
+
+            mitigationLevel:
+                data.mitigationLevel ?? "NONE",
+
+            experiment:
+                data.experiment ?? "default",
 
             blocked:
                 data.blocked ?? false
