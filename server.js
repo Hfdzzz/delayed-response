@@ -15,6 +15,12 @@ const delayedResponse =
 const stats =
     require("./monitoring/stats");
 
+setInterval(() => {
+
+    stats.recordResourceUsage();
+
+}, 1000);
+
 /*
 |--------------------------------------------------------------------------
 | Configuration

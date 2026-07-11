@@ -2,16 +2,26 @@ const stats = require("../monitoring/stats");
 
 const clients = new Map();
 
+/*
+|--------------------------------------------------------------------------
+| Rate Limiter Configuration
+|--------------------------------------------------------------------------
+*/
+
 const WINDOW_MS = 60 * 1000;
-const NORMAL_RPM = 100;
+
+const MAX_REQUESTS = 100;
 
 module.exports = (req, res, next) => {
 
-    //--------------------------------------------------
-    // Ignore Static Assets
-    //--------------------------------------------------
+    /*
+    |--------------------------------------------------------------------------
+    | Ignore Static Assets
+    |--------------------------------------------------------------------------
+    */
 
     const ignoredExtensions = [
+
         ".css",
         ".js",
         ".png",
@@ -21,17 +31,22 @@ module.exports = (req, res, next) => {
         ".svg",
         ".ico",
         ".woff",
-        ".webp",
+        ".woff2",
         ".ttf",
         ".otf",
-        ".woff2",
+        ".webp",
         ".map"
+
     ];
 
     if (
-        ignoredExtensions.some(ext =>
-            req.path.endsWith(ext)
+
+        ignoredExtensions.some(
+
+            ext => req.path.endsWith(ext)
+
         )
+
     ) {
 
         return next();
@@ -40,30 +55,43 @@ module.exports = (req, res, next) => {
 
     const now = Date.now();
 
-    //--------------------------------------------------
-    // Client Identifier
-    //--------------------------------------------------
+    /*
+    |--------------------------------------------------------------------------
+    | Client Identifier
+    |--------------------------------------------------------------------------
+    */
 
     const clientId =
-        req.get("X-Client-ID") ||
-        `${req.ip}:${req.get("User-Agent") || "unknown"}`;
 
-    //--------------------------------------------------
-    // Ground Truth (Eksperimen)
-    //--------------------------------------------------
+        req.get("X-Client-ID") ??
 
-    const actualLabel =
-        req.get("X-Test-Type") || "unknown";
+        (req.get("User-Agent") ?? "unknown");
 
-    //--------------------------------------------------
-    // Global Statistics
-    //--------------------------------------------------
+    /*
+    |--------------------------------------------------------------------------
+    | Ground Truth (Eksperimen)
+    |--------------------------------------------------------------------------
+    */
+
+    const actual =
+
+        req.get("X-Test-Type") ??
+
+        "unknown";
+
+    /*
+    |--------------------------------------------------------------------------
+    | Global Statistics
+    |--------------------------------------------------------------------------
+    */
 
     stats.totalRequests++;
 
-    //--------------------------------------------------
-    // Client
-    //--------------------------------------------------
+    /*
+    |--------------------------------------------------------------------------
+    | Sliding Window
+    |--------------------------------------------------------------------------
+    */
 
     if (!clients.has(clientId)) {
 
@@ -72,67 +100,126 @@ module.exports = (req, res, next) => {
     }
 
     let timestamps =
+
         clients.get(clientId);
 
-    timestamps = timestamps.filter(
+    timestamps =
 
-        time =>
+        timestamps.filter(
 
-            now - time < WINDOW_MS
+            time =>
 
-    );
+                now - time < WINDOW_MS
+
+        );
 
     timestamps.push(now);
 
     clients.set(
+
         clientId,
+
         timestamps
+
     );
 
-    //--------------------------------------------------
-    // Rate
-    //--------------------------------------------------
+    /*
+    |--------------------------------------------------------------------------
+    | Rate Calculation
+    |--------------------------------------------------------------------------
+    */
 
     const rpm =
+
         timestamps.length;
 
-    const blocked =
-        rpm > NORMAL_RPM;
+    const excess =
 
-    //--------------------------------------------------
-    // Record Experiment
-    //--------------------------------------------------
+        Math.max(
+
+            0,
+
+            rpm - MAX_REQUESTS
+
+        );
+
+    const blocked =
+
+        rpm > MAX_REQUESTS;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Mitigation Information
+    |--------------------------------------------------------------------------
+    */
+
+    const mitigationApplied =
+
+        blocked;
+
+    const responseAction =
+
+        blocked
+
+            ? "BLOCK"
+
+            : "ALLOW";
+
+    const mitigationLevel =
+
+        blocked
+
+            ? "AGGRESSIVE"
+
+            : "NONE";
+
+    /*
+    |--------------------------------------------------------------------------
+    | Experiment Logging
+    |--------------------------------------------------------------------------
+    */
 
     stats.recordRequest({
 
-        algorithm: "ratelimit",
+        algorithm:
 
-        timestamp: now,
+            "ratelimit",
+
+        timestamp:
+
+            now,
 
         clientId,
 
-        actual: actualLabel,
+        actual,
 
-        method: req.method,
+        method:
 
-        path: req.path,
+            req.method,
+
+        path:
+
+            req.path,
 
         rpm,
 
-        excess:
+        excess,
 
-            Math.max(
-                0,
-                rpm - NORMAL_RPM
-            ),
+        burstRatio:
 
-        burstRatio: 0,
+            0,
 
-        violationCount: 0,
+        violationCount:
 
-        endpointWeight: 1,
+            0,
 
-        score: rpm,
+        endpointWeight:
+
+            1,
+
+        score:
+
+            0,
 
         riskLevel:
 
@@ -140,17 +227,31 @@ module.exports = (req, res, next) => {
 
                 ? "CRITICAL"
 
-                : "LOW",
+                : "NONE",
 
-        delay: 0,
+        delay:
 
-        blocked
+            0,
+
+        blocked,
+
+        mitigationApplied,
+
+        mitigationLevel,
+
+        responseAction,
+
+        experiment:
+
+            "ratelimit"
 
     });
 
-    //--------------------------------------------------
-    // Block
-    //--------------------------------------------------
+    /*
+    |--------------------------------------------------------------------------
+    | Block Request
+    |--------------------------------------------------------------------------
+    */
 
     if (blocked) {
 

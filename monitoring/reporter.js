@@ -56,9 +56,18 @@ const experiment =
             "utf8"
         )
     );
-
+    
 const requests =
-    experiment.requests;
+        experiment.requests;
+const throughput =
+    (
+        requests.length /
+        (experiment.summary.duration / 1000)
+    ).toFixed(2);
+
+
+const resources =
+    experiment.resources || {};
 
 /*
 |--------------------------------------------------------------------------
@@ -114,6 +123,28 @@ const mitigation = {
     MODERATE: 0,
 
     AGGRESSIVE: 0
+
+};
+
+const mitigationByTraffic = {
+
+    legitimate: {
+
+        NONE: 0,
+        LIGHT: 0,
+        MODERATE: 0,
+        AGGRESSIVE: 0
+
+    },
+
+    attack: {
+
+        NONE: 0,
+        LIGHT: 0,
+        MODERATE: 0,
+        AGGRESSIVE: 0
+
+    }
 
 };
 
@@ -220,17 +251,39 @@ for (const request of requests) {
     // Mitigation Level
     //------------------------------------------
 
-    if (request.delay === 0)
-        mitigation.NONE++;
+let level;
 
-    else if (request.delay < 300)
-        mitigation.LIGHT++;
+if (request.delay === 0)
+    level = "NONE";
 
-    else if (request.delay < 700)
-        mitigation.MODERATE++;
+else if (request.delay < 300)
+    level = "LIGHT";
 
-    else
-        mitigation.AGGRESSIVE++;
+else if (request.delay < 700)
+    level = "MODERATE";
+
+else
+    level = "AGGRESSIVE";
+
+/*
+|--------------------------------------------------------------------------
+| Global Mitigation
+|--------------------------------------------------------------------------
+*/
+
+mitigation[level]++;
+
+/*
+|--------------------------------------------------------------------------
+| Ground Truth Mitigation
+|--------------------------------------------------------------------------
+*/
+
+if (request.actual === "attack")
+    mitigationByTraffic.attack[level]++;
+
+else
+    mitigationByTraffic.legitimate[level]++;
 
     //------------------------------------------
     // Client Aggregation
@@ -298,6 +351,28 @@ function average(total, count) {
     return Number(
         (total / count).toFixed(2)
     );
+
+}
+
+function toMB(bytes) {
+
+    if (!bytes)
+        return "0.00";
+
+    return (
+        bytes / 1024 / 1024
+    ).toFixed(2);
+
+}
+
+function percent(value, total) {
+
+    if (total === 0)
+        return "0%";
+
+    return (
+        value * 100 / total
+    ).toFixed(2) + "%";
 
 }
 
@@ -396,30 +471,64 @@ for (const client of clients.values()) {
 
 const delaySummary = {
 
-    average:
+    overall: {
 
-        average(
-            totalDelay,
-            requests.length
-        ),
+        average:
 
-    attackAverage:
+            average(
+                totalDelay,
+                requests.length
+            ),
 
-        average(
+        maximum:
+
+            maxDelay
+
+    },
+
+    attack: {
+
+        average:
+
+            average(
+                attackDelay,
+                attackDelayCount
+            ),
+
+        total:
+
             attackDelay,
-            attackDelayCount
-        ),
 
-    legitimateAverage:
+        ratio:
 
-        average(
+            average(
+                attackDelay,
+                attackRequests
+            )
+
+    },
+
+    legitimate: {
+
+        average:
+
+            average(
+                legitimateDelay,
+                legitimateDelayCount
+            ),
+
+        total:
+
             legitimateDelay,
-            legitimateDelayCount
-        ),
 
-    maximum:
+        ratio:
 
-        maxDelay
+            average(
+                legitimateDelay,
+                legitimateRequests
+            )
+
+    }
 
 };
 
@@ -547,57 +656,164 @@ console.log("------------------------------------------------------");
 
 console.log("Delay Summary");
 
-console.log(`Average Delay          : ${delaySummary.average} ms`);
-console.log(`Attack Delay Avg       : ${delaySummary.attackAverage} ms`);
-console.log(`Legitimate Delay Avg   : ${delaySummary.legitimateAverage} ms`);
-console.log(`Maximum Delay          : ${delaySummary.maximum} ms`);
+console.log("");
+
+console.log("Overall");
+
+console.log(
+    `    Average Delay        : ${delaySummary.overall.average} ms`
+);
+
+console.log(
+    `    Maximum Delay        : ${delaySummary.overall.maximum} ms`
+);
+
+console.log("");
+
+console.log("Attack Traffic");
+
+console.log(
+    `    Average Delay        : ${delaySummary.attack.average} ms`
+);
+
+console.log(
+    `    Total Delay          : ${delaySummary.attack.total.toLocaleString()} ms`
+);
+
+console.log(
+    `    Delay Ratio          : ${delaySummary.attack.ratio} ms/request`
+);
+
+console.log("");
+
+console.log("Legitimate Traffic");
+
+console.log(
+    `    Average Delay        : ${delaySummary.legitimate.average} ms`
+);
+
+console.log(
+    `    Total Delay          : ${delaySummary.legitimate.total.toLocaleString()} ms`
+);
+
+console.log(
+    `    Delay Ratio          : ${delaySummary.legitimate.ratio} ms/request`
+);
+
+console.log("------------------------------------------------------");
+
+console.log("Resource Summary");
+
+console.log("");
+
+console.log("CPU");
+
+console.log(
+    `    Average CPU          : ${resources.cpuAverage}%`
+);
+
+console.log(
+    `    Peak CPU             : ${resources.cpuPeak}%`
+);
+
+console.log("");
+
+console.log("Memory");
+
+console.log(
+    `    RSS Average          : ${toMB(resources.rssAverage)} MB`
+);
+
+console.log(
+    `    RSS Peak             : ${toMB(resources.rssPeak)} MB`
+);
+
+console.log("");
+
+console.log(
+    `    Heap Used Average    : ${toMB(resources.heapUsedAverage)} MB`
+);
+
+console.log(
+    `    Heap Used Peak       : ${toMB(resources.heapUsedPeak)} MB`
+);
+
+console.log("");
+
+console.log(
+    `    Heap Total Average   : ${toMB(resources.heapTotalAverage)} MB`
+);
+
+console.log(
+    `    Heap Total Peak      : ${toMB(resources.heapTotalPeak)} MB`
+);
+
+console.log("");
+
+console.log("System");
+
+console.log(
+    `    Load Average         : ${resources.loadAverage?.toFixed(2) ?? "0.00"}`
+);
+
+console.log(
+    `    Server Uptime        : ${resources.uptime?.toFixed(2) ?? "0.00"} sec`
+);
+
+console.log("------------------------------------------------------");
+
+console.log("Performance Summary");
+
+console.log("");
+
+console.log(
+    `Experiment Duration    : ${(experiment.summary.duration / 1000).toFixed(2)} sec`
+);
+
+console.log(
+    `Throughput             : ${throughput} req/sec`
+);
 
 console.log("------------------------------------------------------");
 
 console.log("Mitigation Summary");
 
-console.log(
-    `No Mitigation         : ${mitigationSummary.none} (${mitigationSummary.nonePercent}%)`
-);
-
-console.log(
-    `Light Mitigation      : ${mitigationSummary.light} (${mitigationSummary.lightPercent}%)`
-);
-
-console.log(
-    `Moderate Mitigation   : ${mitigationSummary.moderate} (${mitigationSummary.moderatePercent}%)`
-);
-
-console.log(
-    `Aggressive Mitigation : ${mitigationSummary.aggressive} (${mitigationSummary.aggressivePercent}%)`
-);
-
-console.log("------------------------------------------------------");
-
-console.log("Risk Distribution (Request)");
-
-console.log(`LOW                    : ${riskDistribution.LOW}`);
-console.log(`MEDIUM                 : ${riskDistribution.MEDIUM}`);
-console.log(`HIGH                   : ${riskDistribution.HIGH}`);
-console.log(`CRITICAL               : ${riskDistribution.CRITICAL}`);
-
-console.log("------------------------------------------------------");
-
-console.log("Score Summary");
-
-console.log(`Average Score          : ${scoreSummary.average}`);
-console.log(`Peak Score             : ${scoreSummary.peak}`);
-console.log(`Peak RPM               : ${scoreSummary.peakRPM}`);
-
-console.log("------------------------------------------------------");
-
-console.log("Dataset Summary");
-
-console.log(`Stored Requests        : ${experiment.summary.totalLogs}`);
-console.log(`Delayed Requests       : ${experiment.summary.delayedRequests}`);
-console.log(`Total Delay            : ${experiment.summary.totalDelay} ms`);
-console.log(`Average Delay          : ${experiment.summary.averageDelay} ms`);
-console.log(`Unique Clients         : ${experiment.summary.uniqueClients}`);
-
-console.log("======================================================");
 console.log("");
+
+console.log(`Ground Truth: Legitimate (${legitimateRequests} Requests)`);
+
+console.log(
+`No Mitigation         : ${mitigationByTraffic.legitimate.NONE} (${percent(mitigationByTraffic.legitimate.NONE, legitimateRequests)})`
+);
+
+console.log(
+`Light Mitigation      : ${mitigationByTraffic.legitimate.LIGHT} (${percent(mitigationByTraffic.legitimate.LIGHT, legitimateRequests)})`
+);
+
+console.log(
+`Moderate Mitigation   : ${mitigationByTraffic.legitimate.MODERATE} (${percent(mitigationByTraffic.legitimate.MODERATE, legitimateRequests)})`
+);
+
+console.log(
+`Aggressive Mitigation : ${mitigationByTraffic.legitimate.AGGRESSIVE} (${percent(mitigationByTraffic.legitimate.AGGRESSIVE, legitimateRequests)})`
+);
+
+console.log("");
+
+console.log(`Ground Truth: Attack (${attackRequests} Requests)`);
+
+console.log(
+`No Mitigation         : ${mitigationByTraffic.attack.NONE} (${percent(mitigationByTraffic.attack.NONE, attackRequests)})`
+);
+
+console.log(
+`Light Mitigation      : ${mitigationByTraffic.attack.LIGHT} (${percent(mitigationByTraffic.attack.LIGHT, attackRequests)})`
+);
+
+console.log(
+`Moderate Mitigation   : ${mitigationByTraffic.attack.MODERATE} (${percent(mitigationByTraffic.attack.MODERATE, attackRequests)})`
+);
+
+console.log(
+`Aggressive Mitigation : ${mitigationByTraffic.attack.AGGRESSIVE} (${percent(mitigationByTraffic.attack.AGGRESSIVE, attackRequests)})`
+);

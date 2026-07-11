@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
 
 /*
 |--------------------------------------------------------------------------
@@ -36,6 +37,16 @@ class Stats {
         this.totalDelay = 0;
 
         this.requests = [];
+
+        /*
+        |--------------------------------------------------------------------------
+        | Resource Monitoring
+        |--------------------------------------------------------------------------
+        */
+
+        this.resourceSamples = [];
+
+        this.previousCpu = null;
 
     }
 
@@ -109,6 +120,98 @@ class Stats {
         });
 
     }
+
+/*
+|--------------------------------------------------------------------------
+| Record Resource Usage
+|--------------------------------------------------------------------------
+*/
+
+recordResourceUsage() {
+
+    const memory =
+        process.memoryUsage();
+
+    const cpu =
+        this.getCpuSnapshot();
+
+    let cpuUsage = 0;
+
+    if (this.previousCpu) {
+
+        const idleDiff =
+            cpu.idle -
+            this.previousCpu.idle;
+
+        const totalDiff =
+            cpu.total -
+            this.previousCpu.total;
+
+        cpuUsage =
+            (
+                100 *
+                (
+                    1 -
+                    idleDiff / totalDiff
+                )
+            );
+
+    }
+
+    this.previousCpu = cpu;
+
+    this.resourceSamples.push({
+
+        timestamp:
+            Date.now(),
+
+        cpuUsage,
+
+        rss:
+            memory.rss,
+
+        heapUsed:
+            memory.heapUsed,
+
+        heapTotal:
+            memory.heapTotal,
+
+        uptime:
+            process.uptime()
+
+    });
+
+}
+
+getCpuSnapshot() {
+
+    const cpus = os.cpus();
+
+    let idle = 0;
+    let total = 0;
+
+    for (const cpu of cpus) {
+
+        idle += cpu.times.idle;
+
+        total +=
+            cpu.times.user +
+            cpu.times.nice +
+            cpu.times.sys +
+            cpu.times.idle +
+            cpu.times.irq;
+
+    }
+
+    return {
+
+        idle,
+
+        total
+
+    };
+
+}
 
     /*
     |--------------------------------------------------------------------------
@@ -185,6 +288,105 @@ class Stats {
 
     }
 
+/*
+|--------------------------------------------------------------------------
+| Resource Summary
+|--------------------------------------------------------------------------
+*/
+
+getResourceSummary() {
+
+    if (this.resourceSamples.length === 0) {
+
+        return {};
+
+    }
+
+    const rss =
+        this.resourceSamples.map(
+            r => r.rss
+        );
+
+    const heapUsed =
+        this.resourceSamples.map(
+            r => r.heapUsed
+        );
+
+    const heapTotal =
+        this.resourceSamples.map(
+            r => r.heapTotal
+        );
+
+    const cpu =
+
+    this.resourceSamples.map(
+        r => r.cpuUsage
+    );
+
+    const average = array =>
+        array.reduce(
+            (a, b) => a + b,
+            0
+        ) / array.length;
+
+    return {
+        
+        cpuAverage:
+
+    Number(
+        average(cpu).toFixed(2)
+    ),
+
+cpuPeak:
+
+    Number(
+        Math.max(...cpu).toFixed(2)
+    ),
+
+        rssAverage:
+
+            Math.round(
+                average(rss)
+            ),
+
+        rssPeak:
+
+            Math.max(...rss),
+
+        heapUsedAverage:
+
+            Math.round(
+                average(heapUsed)
+            ),
+
+        heapUsedPeak:
+
+            Math.max(...heapUsed),
+
+        heapTotalAverage:
+
+            Math.round(
+                average(heapTotal)
+            ),
+
+        heapTotalPeak:
+
+            Math.max(...heapTotal),
+
+        uptime:
+
+            process.uptime(),
+
+        
+
+        loadAverage:
+
+            os.loadavg()[0]
+
+    };
+
+}
+
     /*
     |--------------------------------------------------------------------------
     | Save Experiment
@@ -219,26 +421,30 @@ class Stats {
 
         const output = {
 
-            metadata: {
+    metadata: {
 
-                algorithm,
+        algorithm,
 
-                createdAt:
-                    new Date().toISOString(),
+        createdAt:
+            new Date().toISOString(),
 
-                version: "1.0"
+        version: "1.0"
 
-            },
+    },
 
-            summary:
+    summary:
 
-                this.getSummary(),
+        this.getSummary(),
 
-            requests:
+    resources:
 
-                this.exportLogs()
+        this.getResourceSummary(),
 
-        };
+    requests:
+
+        this.exportLogs()
+
+};
 
         fs.writeFileSync(
 
