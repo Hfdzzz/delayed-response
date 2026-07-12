@@ -9,8 +9,11 @@ const app = express();
 |--------------------------------------------------------------------------
 */
 
-const delayedResponse =
-    require("./middleware/delayedresponse");
+const mitigation =
+    require("./middleware/ratelimiter");
+
+// const mitigation =
+//     require("./middleware/delayedresponse");
 
 const stats =
     require("./monitoring/stats");
@@ -31,7 +34,7 @@ const PORT =
     process.env.PORT || 3000;
 
 const EXPERIMENT_NAME =
-    process.env.EXPERIMENT || "delayed";
+    process.env.EXPERIMENT || "ratelimit"; // "delayed" or "ratelimit"
 
 /*
 |--------------------------------------------------------------------------
@@ -41,7 +44,7 @@ const EXPERIMENT_NAME =
 
 app.use(express.json());
 
-app.use(delayedResponse);
+app.use(mitigation);
 
 app.use(
 

@@ -85,6 +85,18 @@ let legitimateDelay = 0;
 let attackDelayCount = 0;
 let legitimateDelayCount = 0;
 
+let blockedRequests = 0;
+
+let blockedAttackRequests = 0;
+
+let blockedLegitimateRequests = 0;
+
+const blockedClients = new Set();
+
+const blockedAttackClients = new Set();
+
+const blockedLegitimateClients = new Set();
+
 let totalScore = 0;
 let peakScore = 0;
 let peakRPM = 0;
@@ -185,6 +197,42 @@ for (const request of requests) {
     else
         legitimateRequests++;
 
+    /*
+|--------------------------------------------------------------------------
+| Blocking Statistics
+|--------------------------------------------------------------------------
+*/
+
+if (request.blocked) {
+
+    blockedRequests++;
+
+    blockedClients.add(
+        request.clientId
+    );
+
+    if (request.actual === "attack") {
+
+        blockedAttackRequests++;
+
+        blockedAttackClients.add(
+            request.clientId
+        );
+
+    }
+
+    else {
+
+        blockedLegitimateRequests++;
+
+        blockedLegitimateClients.add(
+            request.clientId
+        );
+
+    }
+
+}
+
     //------------------------------------------
     // Delay
     //------------------------------------------
@@ -251,19 +299,28 @@ for (const request of requests) {
     // Mitigation Level
     //------------------------------------------
 
-let level;
+// let level;
 
-if (request.delay === 0)
-    level = "NONE";
 
-else if (request.delay < 300)
-    level = "LIGHT";
+const level = request.mitigationLevel || "NONE";
 
-else if (request.delay < 700)
-    level = "MODERATE";
+mitigation[level]++;
 
+if (request.actual === "attack")
+    mitigationByTraffic.attack[level]++;
 else
-    level = "AGGRESSIVE";
+    mitigationByTraffic.legitimate[level]++;
+// if (request.delay === 0)
+//     level = "NONE";
+
+// else if (request.delay < 300)
+//     level = "LIGHT";
+
+// else if (request.delay < 700)
+//     level = "MODERATE";
+
+// else
+//     level = "AGGRESSIVE";
 
 /*
 |--------------------------------------------------------------------------
@@ -271,7 +328,7 @@ else
 |--------------------------------------------------------------------------
 */
 
-mitigation[level]++;
+//mitigation[level]++;
 
 /*
 |--------------------------------------------------------------------------
@@ -279,11 +336,11 @@ mitigation[level]++;
 |--------------------------------------------------------------------------
 */
 
-if (request.actual === "attack")
-    mitigationByTraffic.attack[level]++;
+// if (request.actual === "attack")
+//     mitigationByTraffic.attack[level]++;
 
-else
-    mitigationByTraffic.legitimate[level]++;
+// else
+//     mitigationByTraffic.legitimate[level]++;
 
     //------------------------------------------
     // Client Aggregation
@@ -654,53 +711,98 @@ console.log(`CRITICAL               : ${legitimateClientRisk.CRITICAL}`);
 
 console.log("------------------------------------------------------");
 
+if (experiment.metadata.algorithm === "delayed") {
+
 console.log("Delay Summary");
 
 console.log("");
 
-console.log("Overall");
 
-console.log(
-    `    Average Delay        : ${delaySummary.overall.average} ms`
-);
+    console.log("Overall");
 
-console.log(
-    `    Maximum Delay        : ${delaySummary.overall.maximum} ms`
-);
+    console.log(
+        `    Average Delay        : ${delaySummary.overall.average} ms`
+    );
 
-console.log("");
+    console.log(
+        `    Maximum Delay        : ${delaySummary.overall.maximum} ms`
+    );
 
-console.log("Attack Traffic");
+    console.log("");
 
-console.log(
-    `    Average Delay        : ${delaySummary.attack.average} ms`
-);
+    console.log("Attack Traffic");
 
-console.log(
-    `    Total Delay          : ${delaySummary.attack.total.toLocaleString()} ms`
-);
+    console.log(
+        `    Average Delay        : ${delaySummary.attack.average} ms`
+    );
 
-console.log(
-    `    Delay Ratio          : ${delaySummary.attack.ratio} ms/request`
-);
+    console.log(
+        `    Total Delay          : ${delaySummary.attack.total.toLocaleString()} ms`
+    );
 
-console.log("");
+    console.log(
+        `    Delay Ratio          : ${delaySummary.attack.ratio} ms/request`
+    );
 
-console.log("Legitimate Traffic");
+    console.log("");
 
-console.log(
-    `    Average Delay        : ${delaySummary.legitimate.average} ms`
-);
+    console.log("Legitimate Traffic");
 
-console.log(
-    `    Total Delay          : ${delaySummary.legitimate.total.toLocaleString()} ms`
-);
+    console.log(
+        `    Average Delay        : ${delaySummary.legitimate.average} ms`
+    );
 
-console.log(
-    `    Delay Ratio          : ${delaySummary.legitimate.ratio} ms/request`
-);
+    console.log(
+        `    Total Delay          : ${delaySummary.legitimate.total.toLocaleString()} ms`
+    );
+
+    console.log(
+        `    Delay Ratio          : ${delaySummary.legitimate.ratio} ms/request`
+    );
+
+}
+
+else {
+
+    console.log("Blocking Summary");
+
+    console.log("");
+
+    console.log("Blocked Requests");
+
+    console.log(
+        `    Total               : ${blockedRequests}`
+    );
+
+    console.log(
+        `    Attack              : ${blockedAttackRequests}`
+    );
+
+    console.log(
+        `    Legitimate          : ${blockedLegitimateRequests}`
+    );
+
+    console.log("");
+
+    console.log("Blocked Clients");
+
+    console.log(
+        `    Total               : ${blockedClients.size}`
+    );
+
+    console.log(
+        `    Attack              : ${blockedAttackClients.size}`
+    );
+
+    console.log(
+        `    Legitimate          : ${blockedLegitimateClients.size}`
+    );
+
+}
 
 console.log("------------------------------------------------------");
+
+
 
 console.log("Resource Summary");
 
