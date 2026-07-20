@@ -1,0 +1,31 @@
+{
+    "metadata": {
+        "algorithm": "delayed",
+        "createdAt": "2026-07-20T04:15:23.802Z",
+        "version": "1.0"
+    },
+    "summary": {
+        "startTime": "2026-07-20T04:15:16.740Z",
+        "endTime": "2026-07-20T04:15:23.802Z",
+        "duration": 7062,
+        "totalRequests": 0,
+        "delayedRequests": 0,
+        "totalDelay": 0,
+        "averageDelay": 0,
+        "uniqueClients": 0,
+        "totalLogs": 0
+    },
+    "resources": {
+        "cpuAverage": 0.58,
+        "cpuPeak": 2.02,
+        "rssAverage": 60970130,
+        "rssPeak": 61120512,
+        "heapUsedAverage": 7693528,
+        "heapUsedPeak": 7708568,
+        "heapTotalAverage": 11902976,
+        "heapTotalPeak": 11902976,
+        "uptime": 7.34931163,
+        "loadAverage": 0.08
+    },
+    "requests": []
+}
